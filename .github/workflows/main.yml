@@ -5,10 +5,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python-3.12@master
+      - name: Fetch AI-BOM Baseline
+        run: |
+          curl -s https://raw.githubusercontent.com/snyk-workshops/aibom-ref/refs/heads/main/ai-buffet/aibom.baseline.json | jq '.components[] | select(."bom-ref"| startswith("model:")) | ."bom-ref"' > baseline_aibom.models.txt
+      
+      - name: Install Snyk CLI
+        run: |
+          npm install snyk -g
+
+      - name: Run Snyk AI Bom
+        run: |
+          snyk aibom --experimental | jq '.components[] | select(."bom-ref"| startswith("model:")) | ."bom-ref"' > cur_aibom.models.txt
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: aibom
-          args: --experimental
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+
+      - name: Results
+        run: |
+          if diff baseline_aibom.models.txt cur_aibom.models.txt | grep -q .; then
+            echo "Unapproved model(s) found:"
+            echo $(diff baseline_aibom.models.txt cur_aibom.models.txt)
+            exit 1
+          else
+            echo "All models approved."
+          fi
